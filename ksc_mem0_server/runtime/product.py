@@ -14,6 +14,7 @@ from mem0.configs.base import MemoryConfig
 
 from ..config import get_settings
 from ..facts import FactsMemory
+from ..profile import ProfileStore, ProfileStrategyStore, ProfileTaskStore, ensure_profile_schema
 from ..storage import create_pool
 from ..strategy import StrategyStore
 from .schema import init_product_schema
@@ -37,6 +38,10 @@ class ProductRuntime:
         init_product_schema(self.pool)
 
         self.strategy_store = StrategyStore(self.pool, product_id)
+        ensure_profile_schema(self.pool)
+        self.profile_store = ProfileStore(self.pool, dims=s.embedding_dims)
+        self.profile_strategy_store = ProfileStrategyStore(self.pool, product_id, self.strategy_store)
+        self.profile_task_store = ProfileTaskStore(self.pool, product_id)
         self.facts = self._build_facts()
         logger.info("ProductRuntime ready: %s -> db %s", product_id, self.db_name)
 
