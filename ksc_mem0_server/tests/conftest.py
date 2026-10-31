@@ -92,6 +92,20 @@ def history_pool(pg_settings):
 
 
 @pytest.fixture
+def product_pool(pg_settings):
+    """建临时库 + pool + init_product_schema(vector ext + revisions),供策略/画像 store 测试。"""
+    dbname = pg_settings.product_db_name(f"prod-{uuid.uuid4().hex[:8]}")
+    _create_db(dbname)
+    from ksc_mem0_server.runtime.schema import init_product_schema
+    from ksc_mem0_server.storage import create_pool
+
+    pool = create_pool(pg_settings.pg_conninfo(dbname))
+    init_product_schema(pool)
+    yield pool
+    pool.close()
+
+
+@pytest.fixture
 def mock_mem0_factories(monkeypatch):
     """mock mem0 的 LLM/embedder/vector 工厂与 telemetry,避免真 OpenAI 调用与网络。
 

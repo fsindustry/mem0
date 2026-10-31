@@ -4,9 +4,11 @@ from fastapi import APIRouter
 
 from .memories import router as memories_router
 from .products import router as products_router
+from .strategies import router as strategies_router
 
 api_router = APIRouter()
 api_router.include_router(memories_router)
 api_router.include_router(products_router)
+api_router.include_router(strategies_router)
 
 __all__ = ["api_router"]

@@ -83,7 +83,7 @@ def add_memories(req: AddRequest, runtime: ProductRuntime = Depends(get_runtime)
         metadata=req.metadata,
         infer=req.infer,
         memory_type=req.memory_type,
-        prompt=req.prompt,
+        prompt=req.prompt or runtime.get_fact_prompt(),
     )
 
 

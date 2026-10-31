@@ -8,12 +8,14 @@ FactsMemory 的 vector_store 由 mem0 用 MemoryConfig 创建(pgvector 指向该
 """
 
 import logging
+from typing import Optional
 
 from mem0.configs.base import MemoryConfig
 
 from ..config import get_settings
 from ..facts import FactsMemory
 from ..storage import create_pool
+from ..strategy import StrategyStore
 from .schema import init_product_schema
 
 logger = logging.getLogger(__name__)
@@ -34,8 +36,19 @@ class ProductRuntime:
         )
         init_product_schema(self.pool)
 
+        self.strategy_store = StrategyStore(self.pool, product_id)
         self.facts = self._build_facts()
         logger.info("ProductRuntime ready: %s -> db %s", product_id, self.db_name)
+
+    def get_fact_prompt(self) -> Optional[str]:
+        """事实记忆 add 的 custom_instructions:global 策略合并 prompt(惰性刷新)。
+
+        每次 add 前惰性 check_and_reload(轻量 SELECT revision),取 global 策略
+        合并 prompt 注入 mem0 add 的 custom_instructions 插槽;无 global 策略返回 None。
+        """
+        self.strategy_store.check_and_reload()
+        merged = self.strategy_store.get_merged_prompt()
+        return merged or None
 
     def _build_facts(self) -> FactsMemory:
         s = get_settings()
