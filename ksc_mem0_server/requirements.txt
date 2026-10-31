@@ -1,0 +1,11 @@
+# ksc_mem0_server 运行依赖(mem0 本身单独以 editable 安装:pip install -e ./mem0)
+fastapi>=0.110
+uvicorn[standard]>=0.27
+pydantic>=2
+psycopg[binary,pool]>=3.2.8
+sqlalchemy>=2
+alembic>=1.13
+# 测试
+pytest>=8
+pytest-asyncio>=0.23
+httpx>=0.27

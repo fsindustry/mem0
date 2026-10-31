@@ -1,0 +1,12 @@
+"""路由聚合:把各业务子路由挂到 api_router 上。"""
+
+from fastapi import APIRouter
+
+from .memories import router as memories_router
+from .products import router as products_router
+
+api_router = APIRouter()
+api_router.include_router(memories_router)
+api_router.include_router(products_router)
+
+__all__ = ["api_router"]

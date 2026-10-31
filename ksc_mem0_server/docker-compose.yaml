@@ -1,0 +1,48 @@
+# 全 PostgreSQL 多租户记忆服务部署:单 pgvector 实例 + 本服务。
+# 应用库(mem0_app)与各 product 库(mem0_{pid})共享同一 PG 实例(不同 database)。
+#
+# 启动:cd ksc_mem0_server && docker-compose up
+#   - postgres(pgvector):localhost:5433 -> 容器 5432
+#   - mem0-server:       localhost:8000
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mem0-server:
+    build:
+      context: ..
+      dockerfile: ksc_mem0_server/Dockerfile
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      MAINTENANCE_DB: postgres
+      APP_DB_NAME: mem0_app
+      PRODUCT_DB_PREFIX: mem0_
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      AUTH_DISABLED: ${AUTH_DISABLED:-false}
+      ADMIN_API_KEY: ${ADMIN_API_KEY:-}
+      HOST: 0.0.0.0
+      PORT: "8000"
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pg_data:
