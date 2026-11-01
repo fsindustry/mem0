@@ -28,6 +28,17 @@ from ..profile import (
 )
 from ..storage import create_pool
 from ..strategy import StrategyStore
+from ..summary import (
+    SummaryPublisher,
+    SummaryReviewer,
+    SummaryRuntime,
+    SummaryStrategyStore,
+    SummaryTaskStore,
+    SummaryVectorStore,
+    ensure_summary_schema,
+    register_summary_handler,
+)
+from ..extraction import ExtractionFailureStore
 from .schema import init_product_schema
 
 logger = logging.getLogger(__name__)
@@ -61,7 +72,28 @@ class ProductRuntime:
         self.profile_task_store = ProfileTaskStore(self.pool, product_id)
         self.facts = self._build_facts()
         self._build_profile_runtime()
+        self._build_summary_runtime()
+        self.extraction_failure_store = ExtractionFailureStore(self.pool, product_id)
         logger.info("ProductRuntime ready: %s -> db %s", product_id, self.db_name)
+
+    def _build_summary_runtime(self) -> None:
+        ensure_summary_schema(self.pool)
+        self.summary_store = SummaryVectorStore(self.pool, dims=get_settings().embedding_dims)
+        self.summary_strategy_store = SummaryStrategyStore(self.pool, self.product_id, self.strategy_store)
+        self.summary_task_store = SummaryTaskStore(self.pool, self.product_id)
+        reviewer = SummaryReviewer(
+            llm=self.facts.llm,
+            embedding_model=self.facts.embedding_model,
+            summary_store=self.summary_store,
+            strategy_store=self.summary_strategy_store,
+        )
+        self.summary_runtime = SummaryRuntime(
+            self.summary_task_store, self.summary_store, self.summary_strategy_store, reviewer
+        )
+        self.summary_publisher = SummaryPublisher(
+            self.summary_task_store, _get_global_queue(), self.product_id
+        )
+        register_summary_handler(self.summary_runtime)
 
     def _build_profile_runtime(self) -> None:
         """实例化画像生成闭环 + 注册 handler。LLM/embedder 复用 facts 的 mem0 实例。"""
@@ -80,6 +112,10 @@ class ProductRuntime:
             self.profile_task_store, self.profile_gate, _get_global_queue(), self.product_id
         )
         register_profile_handler(self.profile_runtime, self.profile_gate, self.profile_buffer)
+
+    def trigger_summary(self, user_id: str, run_id: str, inputs: list) -> str:
+        """触发摘要生成:登记就绪事件。"""
+        return self.summary_runtime.trigger(user_id, run_id, inputs)
 
     def trigger_profile(self, user_id: str, strategy_id: str, inputs: list) -> str:
         """事实记忆 add 后触发画像:登记就绪事件 + 标记 buffer(供 publisher 入队)。"""

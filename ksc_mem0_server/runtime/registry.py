@@ -57,6 +57,11 @@ class ProductRegistry:
         with self._lock:
             return self._runtimes.get(product_id)
 
+    def snapshot(self) -> dict:
+        """返回 {product_id: ProductRuntime} 快照(供全局 scanner 遍历)。"""
+        with self._lock:
+            return dict(self._runtimes)
+
     def close_all(self) -> None:
         with self._lock:
             for rt in list(self._runtimes.values()):
