@@ -165,7 +165,13 @@ class ProfileTaskStore:
                     (user, strategy, processed, requested),
                 )
                 ev_rows = cur.fetchall()
-                inputs = [r[1] for r in ev_rows]
+                inputs: list = []
+                for r in ev_rows:
+                    snap = r[1]
+                    if isinstance(snap, list):
+                        inputs.extend(snap)
+                    elif snap is not None:
+                        inputs.append(snap)
                 input_manifest = {"events": [r[0] for r in ev_rows], "inputs": inputs}
                 lease_epoch = int(now.timestamp())
                 cur.execute(
@@ -228,8 +234,9 @@ class ProfileTaskStore:
                 )
             conn.commit()
 
-    def publish(self, run: Dict[str, Any], snapshot_id: str, noop: bool = False) -> None:
-        """落盘成功:state.version+1(非 noop), processed=target, active_snapshot_id, 租约释放;events ACKED。"""
+    def publish(self, run: Dict[str, Any], noop: bool = False) -> None:
+        """落盘成功:state.version+1(非 noop), processed=target, active_snapshot_id=review_id, 租约释放;events ACKED。"""
+        snapshot_id = run["review_id"]
         with self.pool.connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(

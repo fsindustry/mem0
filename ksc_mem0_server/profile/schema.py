@@ -7,9 +7,25 @@ UTC_TIMESTAMP(6)→now(), 反引号→双引号, 内联 INDEX→CREATE INDEX。
 
 import logging
 
-from ..runtime.schema import ensure_table
-
 logger = logging.getLogger(__name__)
+
+
+def ensure_table(pool, ddl, table_name, columns=None):
+    """CREATE IF NOT EXISTS + 缺列 ALTER(PG 版,内联以避免循环 import runtime.schema)。"""
+    with pool.connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(ddl)
+            if columns:
+                cur.execute(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_schema = current_schema() AND table_name = %s",
+                    (table_name,),
+                )
+                existing = {r[0] for r in cur.fetchall()}
+                for name, definition in columns:
+                    if name not in existing:
+                        cur.execute(f'ALTER TABLE "{table_name}" ADD COLUMN "{name}" {definition}')
+        conn.commit()
 
 PROFILE_STATE_DDL = """
 CREATE TABLE IF NOT EXISTS profile_state (

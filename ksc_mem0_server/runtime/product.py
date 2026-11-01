@@ -14,12 +14,29 @@ from mem0.configs.base import MemoryConfig
 
 from ..config import get_settings
 from ..facts import FactsMemory
-from ..profile import ProfileStore, ProfileStrategyStore, ProfileTaskStore, ensure_profile_schema
+from ..profile import (
+    ProfileEnqueueGate,
+    ProfilePendingBuffer,
+    ProfilePublisher,
+    ProfileReviewer,
+    ProfileRuntime,
+    ProfileStore,
+    ProfileStrategyStore,
+    ProfileTaskStore,
+    ensure_profile_schema,
+    register_profile_handler,
+)
 from ..storage import create_pool
 from ..strategy import StrategyStore
 from .schema import init_product_schema
 
 logger = logging.getLogger(__name__)
+
+
+def _get_global_queue():
+    from ..tasks.queue import GLOBAL_TASK_QUEUE
+
+    return GLOBAL_TASK_QUEUE
 
 
 class ProductRuntime:
@@ -43,7 +60,31 @@ class ProductRuntime:
         self.profile_strategy_store = ProfileStrategyStore(self.pool, product_id, self.strategy_store)
         self.profile_task_store = ProfileTaskStore(self.pool, product_id)
         self.facts = self._build_facts()
+        self._build_profile_runtime()
         logger.info("ProductRuntime ready: %s -> db %s", product_id, self.db_name)
+
+    def _build_profile_runtime(self) -> None:
+        """实例化画像生成闭环 + 注册 handler。LLM/embedder 复用 facts 的 mem0 实例。"""
+        reviewer = ProfileReviewer(
+            llm=self.facts.llm,
+            embedding_model=self.facts.embedding_model,
+            profile_store=self.profile_store,
+            strategy_store=self.profile_strategy_store,
+        )
+        self.profile_runtime = ProfileRuntime(
+            self.profile_task_store, self.profile_store, self.strategy_store, reviewer
+        )
+        self.profile_gate = ProfileEnqueueGate()
+        self.profile_buffer = ProfilePendingBuffer()
+        self.profile_publisher = ProfilePublisher(
+            self.profile_task_store, self.profile_gate, _get_global_queue(), self.product_id
+        )
+        register_profile_handler(self.profile_runtime, self.profile_gate, self.profile_buffer)
+
+    def trigger_profile(self, user_id: str, strategy_id: str, inputs: list) -> str:
+        """事实记忆 add 后触发画像:登记就绪事件 + 标记 buffer(供 publisher 入队)。"""
+        self.profile_buffer.mark_new(user_id)
+        return self.profile_runtime.trigger(user_id, strategy_id, inputs)
 
     def get_fact_prompt(self) -> Optional[str]:
         """事实记忆 add 的 custom_instructions:global 策略合并 prompt(惰性刷新)。

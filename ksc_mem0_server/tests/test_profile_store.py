@@ -76,7 +76,7 @@ def test_profile_task_store_claim_publish_flow(product_pool):
     assert run["from_generation"] == 0
     assert run["inputs"] == [{"text": "我喜欢咖啡"}]
 
-    ts.publish(run, snapshot_id="snap-1")
+    ts.publish(run)
     assert ts.is_published(run["review_id"]) is True
 
     # 发布后 processed_generation 推进,不再 due
