@@ -7,6 +7,7 @@ from .extraction import router as extraction_router
 from .memories import router as memories_router
 from .products import router as products_router
 from .profile import router as profile_router
+from .shared_spaces import router as shared_spaces_router
 from .strategies import router as strategies_router
 from .summary import router as summary_router
 
@@ -18,5 +19,6 @@ api_router.include_router(profile_router)
 api_router.include_router(summary_router)
 api_router.include_router(extraction_router)
 api_router.include_router(digests_router)
+api_router.include_router(shared_spaces_router)
 
 __all__ = ["api_router"]

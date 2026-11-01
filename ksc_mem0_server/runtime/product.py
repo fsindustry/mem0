@@ -28,6 +28,18 @@ from ..digests import (
 )
 from ..extraction import ExtractionFailureStore
 from ..facts import FactsMemory
+from ..shared_space import (
+    InFlightGate,
+    MemberCatalogStore,
+    SharedSpaceExtractHandler,
+    SharedSpacePublisher,
+    SharedSpaceRegistrar,
+    SharedSpaceStore,
+    SharedVectorStore,
+    ensure_shared_space_schema,
+    make_trigger,
+    register_shared_space_handler,
+)
 from ..profile import (
     ProfileEnqueueGate,
     ProfilePendingBuffer,
@@ -87,8 +99,30 @@ class ProductRuntime:
         self._build_profile_runtime()
         self._build_summary_runtime()
         self._build_digests_runtime()
+        self._build_shared_space_runtime()
         self.extraction_failure_store = ExtractionFailureStore(self.pool, product_id)
         logger.info("ProductRuntime ready: %s -> db %s", product_id, self.db_name)
+
+    def _build_shared_space_runtime(self) -> None:
+        ensure_shared_space_schema(self.pool)
+        s = get_settings()
+        self.shared_space_store = SharedSpaceStore(self.pool, self.product_id)
+        self.shared_vector_store = SharedVectorStore(self.pool, dims=s.embedding_dims)
+        self.member_catalog_store = MemberCatalogStore(self.pool)
+        self.shared_space_gate = InFlightGate()
+        self.shared_space_trigger = make_trigger(_get_global_queue, self.shared_space_gate, self.shared_space_store, self.product_id)
+        self.shared_space_registrar = SharedSpaceRegistrar(
+            self.shared_space_store, lambda: self.facts, self.shared_space_trigger
+        )
+        self.shared_space_extract_handler = SharedSpaceExtractHandler(
+            llm=self.facts.llm,
+            embedding_model=self.facts.embedding_model,
+            store=self.shared_space_store,
+            vector_store=self.shared_vector_store,
+            gate=self.shared_space_gate,
+        )
+        register_shared_space_handler(self.shared_space_extract_handler)
+        self.shared_space_publisher = SharedSpacePublisher(self.shared_space_store, self.shared_space_trigger)
 
     def _build_digests_runtime(self) -> None:
         ensure_digests_schema(self.pool)
