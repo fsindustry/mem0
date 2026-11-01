@@ -51,6 +51,51 @@ def build_membox_pextract_prompt(dialog: str) -> str:
     return MEMBOX_PEXTRACT_PROMPT.format(dialog=dialog.strip() if dialog.strip() else "（无）")
 
 
+MEMBOX_SCENE_ASSIGN_PROMPT = """你是话题分类助手。
+
+任务:判断新话题应归入哪个已有场景,或新建场景并命名。
+
+已有场景列表(可能为空):
+{candidate_scenes}
+
+新话题:
+topic: {topic}
+content: {content}
+
+判定规则:
+- 若新话题与某已有场景主题一致(同一画像事实/同一兴趣领域),归入该场景,输出其 scene_id。
+- 若无匹配,新建场景并命名(≤15 字,概括主题),输出新 scene_id="NEW" + scene_name。
+- 一个话题可归入多个场景(输出多个 scene_id),但通常一个。
+
+输出格式:JSON 对象,不要 markdown 代码块:
+{{"scene_ids": ["<已有scene_id>"], "new_scene_name": "<新建场景名>"}}
+归入已有场景时 scene_ids 填其 id、new_scene_name 留空;新建时 scene_ids=["NEW"]、new_scene_name 填名。
+"""
+
+
+def build_membox_scene_assign_prompt(topic: str, content: str, candidate_scenes: str) -> str:
+    return MEMBOX_SCENE_ASSIGN_PROMPT.format(
+        topic=(topic.strip() if topic.strip() else "（无）"),
+        content=(content.strip() if content.strip() else "（无）"),
+        candidate_scenes=(candidate_scenes.strip() if candidate_scenes.strip() else "（无）"),
+    )
+
+
+def parse_scene_assign_result(raw: str) -> Dict[str, Any]:
+    """解析场景分类结果 {scene_ids, new_scene_name}。"""
+    from ..profile.review import _extract_first_json
+
+    val = _extract_first_json(raw, prefer_array=False)
+    if not isinstance(val, dict):
+        return {"scene_ids": [], "new_scene_name": ""}
+    ids = val.get("scene_ids")
+    if not isinstance(ids, list):
+        ids = []
+    name = val.get("new_scene_name")
+    name = name.strip() if isinstance(name, str) else ""
+    return {"scene_ids": [str(x).strip() for x in ids if isinstance(x, str) and x.strip()], "new_scene_name": name}
+
+
 def build_digest_merge_prompt(old_content: str, new_topic: str, new_content: str, keywords: List[str]) -> str:
     return DIGEST_MERGE_PROMPT.format(
         old_content=(old_content.strip() if old_content.strip() else "（无）"),

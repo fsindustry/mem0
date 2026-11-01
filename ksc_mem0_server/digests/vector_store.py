@@ -213,6 +213,16 @@ class MemSceneStore(_BaseVectorStore):
                 rows = cur.fetchall()
         return [{"id": r[0], "payload": r[1]} for r in rows]
 
+    def count(self, filters: Optional[Dict[str, Any]] = None) -> int:
+        self._require_scope(filters, MEMSCENE_SCOPE_KEYS)
+        where, params = self._build_filter(filters)
+        q = sql.SQL("SELECT COUNT(*) FROM {} {}").format(sql.Identifier(self.collection), where)
+        with self.pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(q, params)
+                row = cur.fetchone()
+        return row[0] if row else 0
+
     def list_overviews(self, owner_type: str, owner_id: str, limit: int = 100) -> List[Dict[str, Any]]:
         """取 range=ALL 总览记录(scene_id='all')。"""
         q = sql.SQL(
