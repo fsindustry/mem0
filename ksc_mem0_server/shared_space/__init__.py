@@ -1,6 +1,8 @@
 """shared_space 共享记忆空间子系统。"""
 
+from .handler import SharedSpaceExtractHandler, register_shared_space_handler
 from .member_catalog import MemberCatalogStore
+from .prompts import build_shared_extract_messages, parse_extract_actions
 from .registration import SharedSpaceRegistrar, compute_source_version
 from .schema import ensure_shared_space_schema
 from .scheduler import (
@@ -28,7 +30,11 @@ __all__ = [
     "SharedVectorStore",
     "MemberCatalogStore",
     "SharedSpaceRegistrar",
+    "SharedSpaceExtractHandler",
+    "register_shared_space_handler",
     "compute_source_version",
+    "build_shared_extract_messages",
+    "parse_extract_actions",
     "DuplicateSpaceNameError",
     "InFlightGate",
     "SharedSpacePublisher",
