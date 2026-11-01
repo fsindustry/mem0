@@ -236,15 +236,18 @@ class MemSceneStore(_BaseVectorStore):
         return [{"id": r[0], "payload": r[1]} for r in rows]
 
     def list_stale_all(self, range_flag: str, cutoff_iso: str, top_k: int = 2000) -> List[Dict[str, Any]]:
-        """GC 用:取 range=ALL/ALL_SNAPSHOT 且 updated_at < cutoff 的记录。"""
-        range_filter = "all" if range_flag == "ALL" else "all_snapshot"
+        """GC 用:取 range=ALL/ALL_SNAPSHOT 且 updated_at < cutoff 的记录。
+
+        range_flag:"ALL" → range 字段="ALL";"ALL_SNAPSHOT" → range="ALL_SNAPSHOT"。
+        过滤按 metadata.range(非 scene_id),因 all 总览 scene_id="all" 是内置,GC 仍要清其过期版本。
+        """
         q = sql.SQL(
-            "SELECT id, metadata FROM {} WHERE metadata->>'scene_id' = %s "
-            "AND (metadata->>'updated_at')timestamp < %s::timestamptz LIMIT %s"
+            "SELECT id, metadata FROM {} WHERE metadata->>'range' = %s "
+            "AND (metadata->>'updated_at')::timestamptz < %s::timestamptz LIMIT %s"
         ).format(sql.Identifier(self.collection))
         with self.pool.connection() as conn:
             with conn.cursor() as cur:
-                cur.execute(q, [range_filter, cutoff_iso, top_k])
+                cur.execute(q, [range_flag, cutoff_iso, top_k])
                 rows = cur.fetchall()
         return [{"id": r[0], "payload": r[1]} for r in rows]
 

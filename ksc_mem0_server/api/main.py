@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter
 
+from .digests import router as digests_router
 from .extraction import router as extraction_router
 from .memories import router as memories_router
 from .products import router as products_router
@@ -16,5 +17,6 @@ api_router.include_router(strategies_router)
 api_router.include_router(profile_router)
 api_router.include_router(summary_router)
 api_router.include_router(extraction_router)
+api_router.include_router(digests_router)
 
 __all__ = ["api_router"]

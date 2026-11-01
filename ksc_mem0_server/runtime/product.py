@@ -13,6 +13,20 @@ from typing import Optional
 from mem0.configs.base import MemoryConfig
 
 from ..config import get_settings
+from ..digests import (
+    DigestsFeedbackStore,
+    DigestsPublisher,
+    DigestsSettingsStore,
+    DigestOverallHandler,
+    MemBoxSealHandler,
+    MemBoxStore,
+    MemSceneGC,
+    MemSceneStore,
+    ensure_digests_schema,
+    register_membox_handler,
+    register_overall_handler,
+)
+from ..extraction import ExtractionFailureStore
 from ..facts import FactsMemory
 from ..profile import (
     ProfileEnqueueGate,
@@ -38,7 +52,6 @@ from ..summary import (
     ensure_summary_schema,
     register_summary_handler,
 )
-from ..extraction import ExtractionFailureStore
 from .schema import init_product_schema
 
 logger = logging.getLogger(__name__)
@@ -73,8 +86,40 @@ class ProductRuntime:
         self.facts = self._build_facts()
         self._build_profile_runtime()
         self._build_summary_runtime()
+        self._build_digests_runtime()
         self.extraction_failure_store = ExtractionFailureStore(self.pool, product_id)
         logger.info("ProductRuntime ready: %s -> db %s", product_id, self.db_name)
+
+    def _build_digests_runtime(self) -> None:
+        ensure_digests_schema(self.pool)
+        s = get_settings()
+        self.membox_store = MemBoxStore(self.pool, dims=s.embedding_dims)
+        self.memscene_store = MemSceneStore(self.pool, dims=s.embedding_dims)
+        self.digests_settings_store = DigestsSettingsStore(self.pool, self.product_id)
+        self.digests_feedback_store = DigestsFeedbackStore(self.pool, self.product_id)
+        from ..digests import MemBoxPendingQueue
+
+        self.membox_pending_queue = MemBoxPendingQueue()
+        self.membox_seal_handler = MemBoxSealHandler(
+            llm=self.facts.llm,
+            embedding_model=self.facts.embedding_model,
+            membox_store=self.membox_store,
+            pending_queue=self.membox_pending_queue,
+        )
+        register_membox_handler(
+            self.facts.llm, self.facts.embedding_model, self.membox_store, self.membox_pending_queue
+        )
+        self.digests_overall_handler = DigestOverallHandler(
+            llm=self.facts.llm,
+            embedding_model=self.facts.embedding_model,
+            membox_store=self.membox_store,
+            memscene_store=self.memscene_store,
+            settings_store=self.digests_settings_store,
+            pending_queue=self.membox_pending_queue,
+        )
+        register_overall_handler(self.digests_overall_handler)
+        self.digests_publisher = DigestsPublisher(self.membox_pending_queue, self.product_id)
+        self.memscene_gc = MemSceneGC(self.membox_store, self.memscene_store)
 
     def _build_summary_runtime(self) -> None:
         ensure_summary_schema(self.pool)

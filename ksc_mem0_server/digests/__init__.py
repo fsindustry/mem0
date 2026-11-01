@@ -1,7 +1,9 @@
 """digests 话题场景子系统:membox + memscene + overall 总览。"""
 
 from .constants import BUILTIN_SCENE_PREFIXES, Episode, is_builtin_scene, now_iso, owner_keys, version_num
+from .daemon import DigestsPublisher
 from .feedback_store import DigestsFeedbackStore
+from .gc import MemSceneGC
 from .membox_handler import MEMBOX_CATEGORY, MEMBOX_TASK_TYPE, BoxSnapshot, MemBoxSealHandler, register_membox_handler
 from .overall_handler import OVERALL_CATEGORY, OVERALL_TASK_TYPE, DigestOverallHandler, register_overall_handler
 from .pending_queue import MemBoxPendingQueue
@@ -37,6 +39,8 @@ __all__ = [
     "MEMBOX_TASK_TYPE",
     "OVERALL_CATEGORY",
     "OVERALL_TASK_TYPE",
+    "DigestsPublisher",
+    "MemSceneGC",
     "register_membox_handler",
     "register_overall_handler",
     "build_membox_pextract_prompt",
